@@ -6,6 +6,11 @@ import webbrowser
 import urllib.request
 import threading
 from pathlib import Path
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent

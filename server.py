@@ -17,6 +17,12 @@ from deep_translator import GoogleTranslator
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # --- DEFAULT CONFIGURATION ---
 DEFAULT_ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_KEY", "53943ab29c08425e21dc240")
 DEFAULT_ELEVENLABS_KEY = os.environ.get("ELEVENLABS_KEY", "ac81e47504a2cea72745cb44b8da857f823882081f8")
