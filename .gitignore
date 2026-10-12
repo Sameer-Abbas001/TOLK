@@ -49,16 +49,20 @@ coverage.xml
 .pytest_cache/
 cover/
 
-# Environments
+
+# Environments and secrets
 .env
-.env.local
-.env.*.local
-.venv
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
 
 # Audio caches and temp files
 tolk_audio_cache/

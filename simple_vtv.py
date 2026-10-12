@@ -1,14 +1,15 @@
+
 """
 TOLK - Multi-Language Voice Translator (v2.0)
 Full-Stack AI Voice-to-Voice Translator with React Frontend & FastAPI Engine.
 """
 
 import os
-import sys
 import uuid
 import tempfile
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+
 import assemblyai as aai
 from deep_translator import GoogleTranslator
 from elevenlabs import VoiceSettings
@@ -21,78 +22,105 @@ except ImportError:
     pass
 
 # --- API KEYS AND CONFIGURATION ---
-ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_KEY", "53943ab29c08425e21dc240")
-ELEVENLABS_KEY = os.environ.get("ELEVENLABS_KEY", "ac81e47504a2cea72745cb44b8da857f823882081f8")
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "gO8Kb3hHPEPElVxVHDwT")
+# Never hardcode API keys in source code.
+ASSEMBLYAI_KEY = os.getenv("ASSEMBLYAI_KEY")
+ELEVENLABS_KEY = os.getenv("ELEVENLABS_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
-# Initialize ElevenLabs client
-try:
-    ELEVENLABS_CLIENT = ElevenLabs(api_key=ELEVENLABS_KEY)
-except Exception as e:
-    ELEVENLABS_CLIENT = None
-    print(f"Warning: ElevenLabs client init error: {e}")
+# Initialize the ElevenLabs client only when a key is configured.
+ELEVENLABS_CLIENT = (
+    ElevenLabs(api_key=ELEVENLABS_KEY)
+    if ELEVENLABS_KEY
+    else None
+)
 
 
-def text_to_speech_concurrent(text, voice_id=ELEVENLABS_VOICE_ID):
-    """Converts the translated text into speech using ElevenLabs."""
+def text_to_speech_concurrent(text, voice_id=None):
+    """Converts translated text into speech using ElevenLabs."""
     if not ELEVENLABS_CLIENT:
-        return ""
-    try:
-        response = ELEVENLABS_CLIENT.text_to_speech.convert(
-            voice_id=voice_id,
-            optimize_streaming_latency="1",
-            output_format="mp3_22050_32",
-            text=text,
-            model_id="eleven_multilingual_v2",
-            voice_settings=VoiceSettings(
-                stability=0.5,
-                similarity_boost=0.8,
-                style=0.5,
-                use_speaker_boost=True,
-            ),
+        raise RuntimeError(
+            "ELEVENLABS_KEY is missing. Configure it in your .env file."
         )
-        temp_dir = tempfile.gettempdir()
-        save_file_path = Path(temp_dir) / f"{uuid.uuid4()}.mp3"
-        with open(save_file_path, "wb") as f:
-            for chunk in response:
-                if chunk:
-                    f.write(chunk)
-        return str(save_file_path)
-    except Exception as e:
-        print(f"TTS Error: {e}")
-        return ""
+
+    voice_id = voice_id or ELEVENLABS_VOICE_ID
+    if not voice_id:
+        raise RuntimeError(
+            "ELEVENLABS_VOICE_ID is missing from your configuration."
+        )
+
+    response = ELEVENLABS_CLIENT.text_to_speech.convert(
+        voice_id=voice_id,
+        optimize_streaming_latency="1",
+        output_format="mp3_22050_32",
+        text=text,
+        model_id="eleven_multilingual_v2",
+        voice_settings=VoiceSettings(
+            stability=0.5,
+            similarity_boost=0.8,
+            style=0.5,
+            use_speaker_boost=True,
+        ),
+    )
+
+    save_file_path = (
+        Path(tempfile.gettempdir()) / f"{uuid.uuid4()}.mp3"
+    )
+
+    with open(save_file_path, "wb") as audio_file:
+        for chunk in response:
+            if chunk:
+                audio_file.write(chunk)
+
+    return str(save_file_path)
 
 
 def audio_transcription(audio_file):
-    """Initializes AssemblyAI and transcribes the audio file."""
+    """Transcribes audio using AssemblyAI."""
+    if not ASSEMBLYAI_KEY:
+        raise RuntimeError(
+            "ASSEMBLYAI_KEY is missing. Configure it in your .env file."
+        )
+
     aai.settings.api_key = ASSEMBLYAI_KEY
     transcriber = aai.Transcriber()
-    transcription = transcriber.transcribe(audio_file)
-    return transcription
+    return transcriber.transcribe(audio_file)
 
 
 def text_translation(text):
-    """Translates text into Japanese and Hindi using neural translators."""
+    """Translates text into Japanese and Hindi."""
     try:
-        ja_text = GoogleTranslator(source="auto", target="ja").translate(text)
-    except Exception:
-        ja_text = text
+        ja_text = GoogleTranslator(
+            source="auto", target="ja"
+        ).translate(text)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Japanese translation failed: {exc}"
+        ) from exc
+
     try:
-        hi_text = GoogleTranslator(source="auto", target="hi").translate(text)
-    except Exception:
-        hi_text = text
+        hi_text = GoogleTranslator(
+            source="auto", target="hi"
+        ).translate(text)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Hindi translation failed: {exc}"
+        ) from exc
+
     return ja_text, hi_text
 
 
 def voice_to_voice(audio_file):
-    """Main voice to voice processing function."""
+    """Main voice-to-voice processing function."""
     if not audio_file:
         raise ValueError("No audio file received.")
-        
+
     transcription_response = audio_transcription(audio_file)
+
     if transcription_response.status == aai.TranscriptStatus.error:
-        raise ValueError(f"Transcription failed: {transcription_response.error}")
-    
+        raise RuntimeError(
+            f"Transcription failed: {transcription_response.error}"
+        )
+
     text = transcription_response.text
     if not text:
         raise ValueError("Transcription returned empty text.")
@@ -100,8 +128,13 @@ def voice_to_voice(audio_file):
     ja_translation, hi_translation = text_translation(text)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        future_ja = executor.submit(text_to_speech_concurrent, ja_translation)
-        future_hi = executor.submit(text_to_speech_concurrent, hi_translation)
+        future_ja = executor.submit(
+            text_to_speech_concurrent, ja_translation
+        )
+        future_hi = executor.submit(
+            text_to_speech_concurrent, hi_translation
+        )
+
         ja_audio_path = future_ja.result()
         hi_audio_path = future_hi.result()
 
@@ -109,6 +142,6 @@ def voice_to_voice(audio_file):
 
 
 if __name__ == "__main__":
-    # Launch the ultra-dynamic full-stack React + FastAPI experience and auto-open browser
+    # Launch the React + FastAPI application.
     from run import main
     main()
