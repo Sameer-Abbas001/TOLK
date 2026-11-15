@@ -11,7 +11,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 import assemblyai as aai
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 
@@ -22,56 +22,81 @@ except ImportError:
     pass
 
 # --- API KEYS AND CONFIGURATION ---
-# Never hardcode API keys in source code.
-ASSEMBLYAI_KEY = os.getenv("ASSEMBLYAI_KEY")
-ELEVENLABS_KEY = os.getenv("ELEVENLABS_KEY")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
-
-# Initialize the ElevenLabs client only when a key is configured.
-ELEVENLABS_CLIENT = (
-    ElevenLabs(api_key=ELEVENLABS_KEY)
-    if ELEVENLABS_KEY
-    else None
-)
+# Cleaned of hardcoded keys for safe GitHub & Vercel deployment.
+# Keys are loaded securely from .env (locally) or Vercel Environment Variables.
+ASSEMBLYAI_KEY = os.getenv("ASSEMBLYAI_KEY", "").strip()
+ELEVENLABS_KEY = os.getenv("ELEVENLABS_KEY", "").strip()
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "wXvR48IpOq9HACltTmt7").strip()
+FREE_TIER_VOICE = "JBFqnCBsd6RMkjVDRZzb"
 
 
 def text_to_speech_concurrent(text, voice_id=None):
-    """Converts translated text into speech using ElevenLabs."""
-    if not ELEVENLABS_CLIENT:
+    """Converts translated text into speech using ElevenLabs with automatic fallback."""
+    key = os.getenv("ELEVENLABS_KEY", ELEVENLABS_KEY)
+    if not key:
         raise RuntimeError(
             "ELEVENLABS_KEY is missing. Configure it in your .env file."
         )
 
-    voice_id = voice_id or ELEVENLABS_VOICE_ID
-    if not voice_id:
+    if not key.startswith("sk_") and len(key) == 64:
+        raise RuntimeError(
+            "ElevenLabs API Key ID used as API key. Only valid Secret API keys starting with 'sk_' can be used. "
+            "Please create or rotate your key in your ElevenLabs dashboard (Settings > API Keys) to copy the secret key."
+        )
+
+    client = ElevenLabs(api_key=key)
+    vid = voice_id or os.getenv("ELEVENLABS_VOICE_ID", ELEVENLABS_VOICE_ID)
+    if not vid:
         raise RuntimeError(
             "ELEVENLABS_VOICE_ID is missing from your configuration."
         )
 
-    response = ELEVENLABS_CLIENT.text_to_speech.convert(
-        voice_id=voice_id,
-        optimize_streaming_latency="1",
-        output_format="mp3_22050_32",
-        text=text,
-        model_id="eleven_multilingual_v2",
-        voice_settings=VoiceSettings(
-            stability=0.5,
-            similarity_boost=0.8,
-            style=0.5,
-            use_speaker_boost=True,
-        ),
-    )
+    def _convert(target_v):
+        res = client.text_to_speech.convert(
+            voice_id=target_v,
+            optimize_streaming_latency="1",
+            output_format="mp3_22050_32",
+            text=text,
+            model_id="eleven_multilingual_v2",
+            voice_settings=VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.8,
+                style=0.5,
+                use_speaker_boost=True,
+            ),
+        )
+        return b"".join(c for c in res if c)
 
-    save_file_path = (
-        Path(tempfile.gettempdir()) / f"{uuid.uuid4()}.mp3"
-    )
+    try:
+        try:
+            audio_bytes = _convert(vid)
+        except Exception as v_err:
+            if "library voices" in str(v_err).lower() or "paid_plan_required" in str(v_err).lower():
+                print(f"[simple_vtv] Voice {vid} requires paid plan. Falling back to core voice George...")
+                audio_bytes = _convert(FREE_TIER_VOICE)
+            else:
+                raise
 
-    with open(save_file_path, "wb") as audio_file:
-        for chunk in response:
-            if chunk:
-                audio_file.write(chunk)
+        save_file_path = (
+            Path(tempfile.gettempdir()) / f"{uuid.uuid4()}.mp3"
+        )
 
-    return str(save_file_path)
+        with open(save_file_path, "wb") as audio_file:
+            audio_file.write(audio_bytes)
+
+        return str(save_file_path)
+    except Exception as exc:
+        if hasattr(exc, "body") and isinstance(exc.body, dict):
+            detail = exc.body.get("detail", {})
+            if isinstance(detail, dict) and "message" in detail:
+                raise RuntimeError(f"ElevenLabs speech synthesis error: {detail['message']}") from exc
+        raise
+    except Exception as exc:
+        if hasattr(exc, "body") and isinstance(exc.body, dict):
+            detail = exc.body.get("detail", {})
+            if isinstance(detail, dict) and "message" in detail:
+                raise RuntimeError(f"ElevenLabs speech synthesis error: {detail['message']}") from exc
+        raise
 
 
 def audio_transcription(audio_file):
@@ -87,25 +112,20 @@ def audio_transcription(audio_file):
 
 
 def text_translation(text):
-    """Translates text into Japanese and Hindi."""
-    try:
-        ja_text = GoogleTranslator(
-            source="auto", target="ja"
-        ).translate(text)
-    except Exception as exc:
-        raise RuntimeError(
-            f"Japanese translation failed: {exc}"
-        ) from exc
+    """Translates text into Japanese and Hindi with resilient fallback."""
+    def _translate(lang, tag):
+        try:
+            return GoogleTranslator(source="auto", target=lang).translate(text)
+        except Exception:
+            try:
+                import re
+                res = MyMemoryTranslator(source="en-US", target=tag).translate(text)
+                return re.sub(r"<[^>]+>", "", res).strip()
+            except Exception as exc:
+                raise RuntimeError(f"Translation to {lang} failed: {exc}") from exc
 
-    try:
-        hi_text = GoogleTranslator(
-            source="auto", target="hi"
-        ).translate(text)
-    except Exception as exc:
-        raise RuntimeError(
-            f"Hindi translation failed: {exc}"
-        ) from exc
-
+    ja_text = _translate("ja", "ja-JP")
+    hi_text = _translate("hi", "hi-IN")
     return ja_text, hi_text
 
 

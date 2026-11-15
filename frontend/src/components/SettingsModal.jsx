@@ -13,13 +13,12 @@ export default function SettingsModal({
   if (!isOpen) return null;
 
   const popularVoices = [
-    { id: 'gO8Kb3hHPEPElVxVHDwT', name: 'Original Cloned Voice (Default)', desc: 'Custom Voice Profile' },
-    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', desc: 'Calm & Warm American Female' },
-    { id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi', desc: 'Strong & Confident Female' },
-    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', desc: 'Expressive & Bright Female' },
-    { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', desc: 'Well-rounded Male' },
-    { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli', desc: 'Emotional & Young Female' },
-    { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh', desc: 'Deep & Resonant Male' },
+    { id: 'wXvR48IpOq9HACltTmt7', name: 'Custom Voice Profile', desc: 'wXvR48IpOq9HACltTmt7' },
+    { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George (Warm British Male)', desc: 'Core Multilingual Voice' },
+    { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily (Expressive British Female)', desc: 'Core Multilingual Voice' },
+    { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica (Warm American Female)', desc: 'Core Multilingual Voice' },
+    { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam (Energetic American Male)', desc: 'Core Multilingual Voice' },
+    { id: 'FZkK3TvQ0pjyDmT8fzIW', name: 'Custom Voice Profile', desc: 'User Voice ID' },
   ];
 
   const handleSave = () => {
@@ -33,7 +32,7 @@ export default function SettingsModal({
 
   const handleReset = () => {
     const defaultConfig = {
-      voiceId: 'gO8Kb3hHPEPElVxVHDwT',
+      voiceId: 'JBFqnCBsd6RMkjVDRZzb',
       assemblyKey: '',
       elevenLabsKey: '',
       stability: 0.5,
@@ -159,14 +158,22 @@ export default function SettingsModal({
             </div>
 
             <div>
-              <span className="text-[11px] text-slate-400 block mb-1">Custom ElevenLabs API Key</span>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] text-slate-400 block">Custom ElevenLabs Secret API Key</span>
+                <span className="text-[10px] text-indigo-400 font-mono">Starts with 'sk_'</span>
+              </div>
               <input
                 type="password"
                 value={localConfig.elevenLabsKey || ''}
                 onChange={(e) => setLocalConfig({ ...localConfig, elevenLabsKey: e.target.value })}
-                placeholder="elevenlabs_key_..."
+                placeholder="sk_..."
                 className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
               />
+              {localConfig.elevenLabsKey && !localConfig.elevenLabsKey.startsWith('sk_') && localConfig.elevenLabsKey.length === 64 && (
+                <p className="mt-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 leading-relaxed">
+                  ⚠️ This appears to be your 64-character <strong>Key ID</strong>. ElevenLabs requires the <strong>Secret Key</strong> (starts with <code>sk_</code>). Please create or rotate your key in your ElevenLabs dashboard (Settings &gt; API Keys).
+                </p>
+              )}
             </div>
           </div>
         </div>

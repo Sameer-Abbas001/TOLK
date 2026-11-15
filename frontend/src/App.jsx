@@ -71,12 +71,27 @@ export default function App() {
   // Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [config, setConfig] = useState({
-    voiceId: 'gO8Kb3hHPEPElVxVHDwT',
+    voiceId: 'JBFqnCBsd6RMkjVDRZzb',
     assemblyKey: '',
     elevenLabsKey: '',
     stability: 0.5,
     similarityBoost: 0.8,
   });
+
+  // Sync default voice ID and server status from backend
+  useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.voiceId) {
+          setConfig((prev) => ({
+            ...prev,
+            voiceId: prev.voiceId === 'gO8Kb3hHPEPElVxVHDwT' || !prev.voiceId ? data.voiceId : prev.voiceId,
+          }));
+        }
+      })
+      .catch((err) => console.log('API health check error:', err));
+  }, []);
 
   // Audio Context & Recording Refs
   const mediaRecorderRef = useRef(null);

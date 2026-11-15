@@ -123,11 +123,21 @@ export default function AudioPlayerCard({ item, index }) {
         </div>
 
         {/* Translated Text Display */}
-        <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 mb-5 relative min-h-[85px] flex items-center">
+        <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 mb-4 relative min-h-[85px] flex items-center">
           <p className="text-base text-slate-100 font-medium leading-relaxed select-all">
             {item.translatedText || 'Translating...'}
           </p>
         </div>
+
+        {item.audioError && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+            <span className="text-sm">⚠️</span>
+            <div className="leading-relaxed">
+              <span className="font-semibold block mb-0.5">Voice Synthesis Notice:</span>
+              <span>{item.audioError}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Audio Controls Section */}
