@@ -150,7 +150,7 @@ export default function SettingsModal({
             )}
           </div>
         </div>
-      </div>
+      
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-4 border-t border-slate-800">
@@ -185,5 +185,9 @@ export default function SettingsModal({
         </div>
       </div>
     </div>
+<<<<<<< HEAD
+=======
+  </div>
+>>>>>>> eb0b814737149f5db416715553ae0bd7ba8045b2
   );
 }
