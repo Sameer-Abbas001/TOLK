@@ -102,3 +102,4 @@ logs/
 # Antigravity / Agent logs & scratch
 .system_generated/
 scratch/
+\n# Vercel local metadata\n.vercel/\n

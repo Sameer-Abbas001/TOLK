@@ -1,13 +1,9 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.py" }
-  ],
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
   "functions": {
-    "api/index.py": {
-      "runtime": "python3.12",
-      "maxDuration": 60
+    "server.py": {
+      "maxDuration": 300
     }
   }
 }

@@ -183,6 +183,11 @@ export default function App() {
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 4 * 1024 * 1024) {
+        setError('Audio files must be 4 MB or smaller on the Vercel deployment. Please compress or trim the recording.');
+        e.target.value = '';
+        return;
+      }
       setAudioFile(file);
       setAudioBlob(file);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -218,11 +223,16 @@ export default function App() {
           return;
         }
 
+        const selectedAudio = audioFile || audioBlob;
+        if (selectedAudio.size > 4 * 1024 * 1024) {
+          throw new Error('Audio files must be 4 MB or smaller on the Vercel deployment. Please compress or trim the recording.');
+        }
+
         // Animated stage advance
         setTimeout(() => setPipelineStage(2), 600);
 
         const formData = new FormData();
-        formData.append('audio', audioFile || audioBlob, 'input_audio.wav');
+        formData.append('audio', selectedAudio, audioFile?.name || 'input_audio.wav');
         formData.append('targetLanguages', selectedLangs.join(','));
         formData.append('voiceId', config.voiceId);
         if (config.assemblyKey) formData.append('assemblyKey', config.assemblyKey);
@@ -515,7 +525,7 @@ export default function App() {
                       <span className="text-xs font-semibold text-slate-200">
                         {audioFile ? audioFile.name : 'Click to select or drag & drop WAV, MP3, M4A'}
                       </span>
-                      <span className="text-[11px] text-slate-400 mt-0.5">Max size: 25MB</span>
+                      <span className="text-[11px] text-slate-400 mt-0.5">Max size: 4MB (Vercel limit)</span>
                       <input
                         type="file"
                         accept="audio/*"

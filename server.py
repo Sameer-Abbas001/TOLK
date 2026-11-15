@@ -1,5 +1,6 @@
 import os
 import time
+import base64
 import uuid
 import tempfile
 import asyncio
@@ -29,20 +30,72 @@ DEFAULT_ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_KEY", "c0e91ef108694650abe05
 DEFAULT_ELEVENLABS_KEY = os.environ.get("ELEVENLABS_KEY", "sk_3f615f3ab56b8915c636cf6859c88c16466baac9c94fb156")
 DEFAULT_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "wXvR48IpOq9HACltTmt7")
 FREE_TIER_FALLBACK_VOICE = "JBFqnCBsd6RMkjVDRZzb"
-
 # Temporary directory for generated audio
 AUDIO_OUTPUT_DIR = Path(tempfile.gettempdir()) / "tolk_audio_cache"
 AUDIO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Vercel Functions have a 4.5 MB request/response payload ceiling.
+# Keep JSON audio responses comfortably below that limit.
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+MAX_INLINE_AUDIO_BYTES = 2_500_000
+
+
+def audio_file_to_data_url(filename: Optional[str]) -> Optional[str]:
+    """Read generated audio immediately and return it inline.
+
+    Serverless filesystems are temporary and are not guaranteed to be shared
+    between separate requests, so clients must not rely on /api/audio files.
+    """
+    if not filename:
+        return None
+    path = AUDIO_OUTPUT_DIR / filename
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    try:
+        path.unlink()
+    except OSError:
+        pass
+    if len(data) > MAX_INLINE_AUDIO_BYTES:
+        return None
+    return "data:audio/mpeg;base64," + base64.b64encode(data).decode("ascii")
+
+
+def enforce_inline_audio_budget(audio_results: dict, audio_errors: dict) -> None:
+    """Keep the total JSON response below Vercel's 4.5 MB response ceiling."""
+    budget = 3_000_000
+    used = 0
+    for language in list(audio_results):
+        data_url = audio_results.get(language)
+        if not data_url:
+            continue
+        size = len(data_url.encode("utf-8"))
+        if used + size > budget:
+            audio_results[language] = None
+            audio_errors[language] = (
+                "Audio output was too large for a serverless response. "
+                "Try shorter source audio or select fewer target languages."
+            )
+        else:
+            used += size
+
 app = FastAPI(title="TOLK - Multi-Language Voice Translator API", version="2.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Same-origin production deployment does not require permissive CORS.
+# Local development uses the Vite proxy, so it also remains same-origin.
+_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if _ALLOWED_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_ALLOWED_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
 
 SUPPORTED_LANGUAGES = [
     {"code": "ja", "name": "Japanese", "nativeName": "日本語", "flag": "🇯🇵", "script": "Japanese (Kanji/Kana)", "sampleVoice": "Mizuki"},
@@ -70,25 +123,8 @@ def extract_elevenlabs_error(err: Exception) -> str:
 
 
 def run_local_tts_fallback(text: str, save_path: Path) -> bool:
-    """Attempts local pyttsx3 synthesis, verifying non-empty output."""
-    try:
-        import pyttsx3
-        engine = pyttsx3.init()
-        engine.save_to_file(text, str(save_path))
-        engine.runAndWait()
-        if save_path.exists() and save_path.stat().st_size > 100:
-            return True
-        if save_path.exists():
-            save_path.unlink()
-        return False
-    except Exception as local_err:
-        print(f"[Fallback Local TTS Error] {local_err}")
-        if save_path.exists():
-            try:
-                save_path.unlink()
-            except Exception:
-                pass
-        return False
+    """Local desktop TTS is intentionally disabled in serverless deployments."""
+    return False
 
 
 def synthesize_speech_elevenlabs(
@@ -312,13 +348,17 @@ def text_to_voice(req: TextToVoiceRequest):
             lang_code = future_to_lang[future]
             try:
                 fname, err = future.result()
-                audio_results[lang_code] = f"/api/audio/{fname}" if fname else None
-                audio_errors[lang_code] = err
+                audio_results[lang_code] = audio_file_to_data_url(fname) if fname else None
+                if fname and audio_results[lang_code] is None:
+                    audio_errors[lang_code] = "Generated audio exceeded the inline response limit. Try shorter text or fewer target languages."
+                else:
+                    audio_errors[lang_code] = err
             except Exception as e:
                 print(f"Error synthesizing {lang_code}: {e}")
                 audio_results[lang_code] = None
                 audio_errors[lang_code] = str(e)
 
+    enforce_inline_audio_budget(audio_results, audio_errors)
     lang_metadata = {item["code"]: item for item in SUPPORTED_LANGUAGES}
     
     output_items = []
@@ -353,6 +393,11 @@ async def voice_to_voice_endpoint(
     temp_input_path = AUDIO_OUTPUT_DIR / f"input_{uuid.uuid4()}_{audio.filename}"
     try:
         contents = await audio.read()
+        if len(contents) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Audio file exceeds the 4 MB limit for Vercel Functions. Use a shorter or compressed audio file.",
+            )
         with open(temp_input_path, "wb") as f:
             f.write(contents)
         
@@ -395,13 +440,20 @@ async def voice_to_voice_endpoint(
                 lang_code = future_to_lang[future]
                 try:
                     fname, err = future.result()
-                    audio_results[lang_code] = f"/api/audio/{fname}" if fname else None
-                    audio_errors[lang_code] = err
+                    audio_results[lang_code] = audio_file_to_data_url(fname) if fname else None
+                    if fname and audio_results[lang_code] is None:
+                        audio_errors[lang_code] = (
+                            "Generated audio exceeded the inline response limit. "
+                            "Try shorter text or fewer target languages."
+                        )
+                    else:
+                        audio_errors[lang_code] = err
                 except Exception as e:
                     print(f"Error synthesizing {lang_code}: {e}")
                     audio_results[lang_code] = None
                     audio_errors[lang_code] = str(e)
 
+        enforce_inline_audio_budget(audio_results, audio_errors)
         lang_metadata = {item["code"]: item for item in SUPPORTED_LANGUAGES}
         output_items = []
         for code in lang_list:
@@ -437,7 +489,8 @@ if FRONTEND_DIST.exists():
 
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
-        file_path = FRONTEND_DIST / full_path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
+        requested = (FRONTEND_DIST / full_path).resolve()
+        root = FRONTEND_DIST.resolve()
+        if requested.is_relative_to(root) and requested.is_file():
+            return FileResponse(requested)
         return FileResponse(FRONTEND_DIST / "index.html")

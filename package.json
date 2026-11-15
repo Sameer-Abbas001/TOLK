@@ -4,7 +4,7 @@
   "private": true,
   "description": "TOLK - Multi-Language Voice Translator AI",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
     "start": "python run.py"
   }
 }
