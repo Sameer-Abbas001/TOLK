@@ -182,9 +182,11 @@ export default function SettingsModal({
               'Save Settings'
             )}
           </button>
+        
         </div>
       </div>
     </div>
-
+  </div>
   );
 }
+
