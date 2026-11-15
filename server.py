@@ -1,7 +1,6 @@
 import os
 import time
 import uuid
-import base64
 import tempfile
 import asyncio
 from pathlib import Path
@@ -26,31 +25,14 @@ except ImportError:
     pass
 
 # --- DEFAULT CONFIGURATION ---
-# Cleaned of hardcoded keys for safe GitHub & Vercel deployment.
-# Keys are loaded securely from .env (locally) or Vercel Environment Variables.
-DEFAULT_ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_KEY", "").strip()
-DEFAULT_ELEVENLABS_KEY = os.environ.get("ELEVENLABS_KEY", "").strip()
-DEFAULT_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "wXvR48IpOq9HACltTmt7").strip()
+DEFAULT_ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_KEY", "c0e91ef108694650abe05227dc946d48")
+DEFAULT_ELEVENLABS_KEY = os.environ.get("ELEVENLABS_KEY", "sk_3f615f3ab56b8915c636cf6859c88c16466baac9c94fb156")
+DEFAULT_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "wXvR48IpOq9HACltTmt7")
 FREE_TIER_FALLBACK_VOICE = "JBFqnCBsd6RMkjVDRZzb"
 
 # Temporary directory for generated audio
 AUDIO_OUTPUT_DIR = Path(tempfile.gettempdir()) / "tolk_audio_cache"
 AUDIO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def get_audio_url_or_data_uri(fname: Optional[str]) -> Optional[str]:
-    """Returns a base64 Data URI for serverless/Vercel compatibility, or local URL."""
-    if not fname:
-        return None
-    save_path = AUDIO_OUTPUT_DIR / fname
-    if save_path.exists():
-        try:
-            with open(save_path, "rb") as af:
-                b64 = base64.b64encode(af.read()).decode("utf-8")
-            return f"data:audio/mp3;base64,{b64}"
-        except Exception:
-            pass
-    return f"/api/audio/{fname}"
 
 app = FastAPI(title="TOLK - Multi-Language Voice Translator API", version="2.0.0")
 
@@ -330,7 +312,7 @@ def text_to_voice(req: TextToVoiceRequest):
             lang_code = future_to_lang[future]
             try:
                 fname, err = future.result()
-                audio_results[lang_code] = get_audio_url_or_data_uri(fname)
+                audio_results[lang_code] = f"/api/audio/{fname}" if fname else None
                 audio_errors[lang_code] = err
             except Exception as e:
                 print(f"Error synthesizing {lang_code}: {e}")
@@ -413,7 +395,7 @@ async def voice_to_voice_endpoint(
                 lang_code = future_to_lang[future]
                 try:
                     fname, err = future.result()
-                    audio_results[lang_code] = get_audio_url_or_data_uri(fname)
+                    audio_results[lang_code] = f"/api/audio/{fname}" if fname else None
                     audio_errors[lang_code] = err
                 except Exception as e:
                     print(f"Error synthesizing {lang_code}: {e}")

@@ -22,11 +22,9 @@ except ImportError:
     pass
 
 # --- API KEYS AND CONFIGURATION ---
-# Cleaned of hardcoded keys for safe GitHub & Vercel deployment.
-# Keys are loaded securely from .env (locally) or Vercel Environment Variables.
-ASSEMBLYAI_KEY = os.getenv("ASSEMBLYAI_KEY", "").strip()
-ELEVENLABS_KEY = os.getenv("ELEVENLABS_KEY", "").strip()
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "wXvR48IpOq9HACltTmt7").strip()
+ASSEMBLYAI_KEY = os.getenv("ASSEMBLYAI_KEY", "c0e91ef108694650abe05227dc946d48")
+ELEVENLABS_KEY = os.getenv("ELEVENLABS_KEY", "sk_3f615f3ab56b8915c636cf6859c88c16466baac9c94fb156")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "wXvR48IpOq9HACltTmt7")
 FREE_TIER_VOICE = "JBFqnCBsd6RMkjVDRZzb"
 
 

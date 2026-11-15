@@ -7,6 +7,5 @@ assemblyai>=0.23.0
 deep-translator>=1.11.4
 elevenlabs>=1.0.0
 python-dotenv>=1.0.1
+pyttsx3>=2.90
 requests>=2.31.0
-# Note: pyttsx3 removed — not compatible with Vercel serverless (requires OS audio drivers)
-# It is imported lazily inside run_local_tts_fallback() so local installs still work
