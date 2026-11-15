@@ -185,9 +185,6 @@ export default function SettingsModal({
         </div>
       </div>
     </div>
-<<<<<<< HEAD
-=======
-  </div>
->>>>>>> eb0b814737149f5db416715553ae0bd7ba8045b2
+
   );
 }
