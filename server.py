@@ -26,10 +26,10 @@ except ImportError:
     pass
 
 # --- DEFAULT CONFIGURATION ---
-DEFAULT_ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_KEY", "c0e91ef108694650abe05227dc946d48")
-DEFAULT_ELEVENLABS_KEY = os.environ.get("ELEVENLABS_KEY", "sk_3f615f3ab56b8915c636cf6859c88c16466baac9c94fb156")
-DEFAULT_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "wXvR48IpOq9HACltTmt7")
-FREE_TIER_FALLBACK_VOICE = "JBFqnCBsd6RMkjVDRZzb"
+DEFAULT_ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_KEY", "")
+DEFAULT_ELEVENLABS_KEY = os.environ.get("ELEVENLABS_KEY", "")
+DEFAULT_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
+FREE_TIER_FALLBACK_VOICE = "JBFqnCBsd6RMkjV"
 # Temporary directory for generated audio
 AUDIO_OUTPUT_DIR = Path(tempfile.gettempdir()) / "tolk_audio_cache"
 AUDIO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
